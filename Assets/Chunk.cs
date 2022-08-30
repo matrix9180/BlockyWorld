@@ -20,7 +20,7 @@ public class Chunk : MonoBehaviour
     public int octaves = 8;
     public float heightOffset = -33;
 
-    Vector3 location;
+    public Vector3 location;
 
     public Block[,,] blocks;
     //Flat[x + WIDTH * (y + DEPTH * z)] = Original[x, y, z]
@@ -48,7 +48,7 @@ public class Chunk : MonoBehaviour
                 chunkData[i] = MeshUtils.BlockType.DIRT;
             else
             {
-                chunkData[i] = MeshUtils.BlockType.AIR        
+                chunkData[i] = MeshUtils.BlockType.AIR;
             }
             
             if(MeshUtils.fBM(x, z, octaves, scale, heightScale, heightOffset) > y)
