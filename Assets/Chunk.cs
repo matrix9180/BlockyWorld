@@ -26,6 +26,7 @@ public class Chunk : MonoBehaviour
 
     CalculateBlockTypes calculateBlockTypes;
     JobHandle jobHandle;
+    public NativeArray<Unity.Mathematics.Random> RandomArray { get; private set; }
 
     struct CalculateBlockTypes : IJobParallelFor
     {
@@ -33,7 +34,7 @@ public class Chunk : MonoBehaviour
         public int width;
         public int height;
         public Vector3 location;
-        public Unity.Mathematics.Random random;
+        public NativeArray<Unity.Mathematics.Random> randoms;
 
         public void Execute(int i)
         {
@@ -41,7 +42,7 @@ public class Chunk : MonoBehaviour
             int y = (i / width) % height + (int)location.y;
             int z = i / (width * height) + (int)location.z;
 
-            random = new Unity.Mathematics.Random(1);
+            var random = randoms[i];
 
             int surfaceHeight = (int)MeshUtils.fBM(x, z, World.surfaceSettings.octaves,
                                                    World.surfaceSettings.scale, World.surfaceSettings.heightScale,
@@ -95,24 +96,29 @@ public class Chunk : MonoBehaviour
         int blockCount = width * depth * height;
         chunkData = new MeshUtils.BlockType[blockCount];
         NativeArray<MeshUtils.BlockType> blockTypes = new NativeArray<MeshUtils.BlockType>(chunkData, Allocator.Persistent);
+
+        var randomArray = new Unity.Mathematics.Random[blockCount];
+        var seed = new System.Random();
+
+        for (int i = 0; i < blockCount; ++i)
+            randomArray[i] = new Unity.Mathematics.Random((uint)seed.Next());
+
+        RandomArray = new NativeArray<Unity.Mathematics.Random>(randomArray, Allocator.Persistent);
+
         calculateBlockTypes = new CalculateBlockTypes()
         {
             cData = blockTypes,
             width = width,
             height = height,
-            location = location
+            location = location,
+            randoms = RandomArray
         };
 
         jobHandle = calculateBlockTypes.Schedule(chunkData.Length, 64);
         jobHandle.Complete();
         calculateBlockTypes.cData.CopyTo(chunkData);
         blockTypes.Dispose();
-    }
-
-    // Start is called before the first frame update
-    void Start()
-    {
-
+        RandomArray.Dispose();
     }
 
     public void CreateChunk(Vector3 dimensions, Vector3 position)
@@ -127,7 +133,7 @@ public class Chunk : MonoBehaviour
         meshRenderer = mr;
         mr.material = atlas;
         blocks = new Block[width, height, depth];
-        BuildChunk();
+        if (rebuildBlocks) BuildChunk();
 
         var inputMeshes = new List<Mesh>();
         int vertexStart = 0;
@@ -253,11 +259,5 @@ public class Chunk : MonoBehaviour
             }
 
         }
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
     }
 }

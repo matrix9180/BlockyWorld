@@ -24,7 +24,8 @@ public struct PerlinSettings
 
 public class World : MonoBehaviour
 {
-    public static Vector3Int worldDimensions = new Vector3Int(4, 4, 4);
+    public static Vector3Int worldDimensions = new Vector3Int(20, 5, 20);
+    public static Vector3Int extraWorldDimensions = new Vector3Int(10, 5, 10);
     public static Vector3Int chunkDimensions = new Vector3Int(10, 10, 10);
     public GameObject chunkPrefab;
     public GameObject mCamera;
@@ -89,7 +90,7 @@ public class World : MonoBehaviour
         StartCoroutine(BuildWorld());
     }
 
-    void BuildChunkColumn(int x, int z)
+    void BuildChunkColumn(int x, int z, bool meshEnabled = true)
     {
         for (int y = 0; y < worldDimensions.y; y++)
         {
@@ -103,12 +104,42 @@ public class World : MonoBehaviour
                 chunkChecker.Add(position);
                 chunks.Add(position, c);
             }
-            else
-            {
-                chunks[position].meshRenderer.enabled = true;
-            }
+            chunks[position].meshRenderer.enabled = meshEnabled;
+            
+            
         }
         chunkColumns.Add(new Vector2Int(x, z));
+    }
+
+    IEnumerator BuildExtraWorld()
+    {
+        int zEnd = worldDimensions.z + extraWorldDimensions.z;
+        int zStart = worldDimensions.z - 1;
+        int xEnd = worldDimensions.x + extraWorldDimensions.x;
+        int xStart = worldDimensions.x - 1;
+
+
+        for (int z = zStart; z < zEnd; z++)
+        {
+            for (int x = 0; x < xEnd; x++)
+            {
+                BuildChunkColumn(x * chunkDimensions.x, z * chunkDimensions.z, false);
+                yield return null;
+            }
+
+        }
+
+        for (int z = 0; z < zEnd; z++)
+        {
+            for (int x = xStart; x < xEnd; x++)
+            {
+                BuildChunkColumn(x * chunkDimensions.x, z * chunkDimensions.z, false);
+                yield return null;
+            }
+
+        }
+
+
     }
 
 
@@ -126,7 +157,6 @@ public class World : MonoBehaviour
         }
 
         mCamera.SetActive(false);
-        
 
         int xpos = (worldDimensions.x * chunkDimensions.x) / 2;
         int zpos = (worldDimensions.z * chunkDimensions.z) / 2;
@@ -138,6 +168,7 @@ public class World : MonoBehaviour
         lastBuildPosition = Vector3Int.CeilToInt(fpc.transform.position);
         StartCoroutine(BuildCoordinator());
         StartCoroutine(UpdateWorld());
+        StartCoroutine(BuildExtraWorld());
     }
 
     WaitForSeconds wfs = new WaitForSeconds(0.5f);
@@ -145,11 +176,11 @@ public class World : MonoBehaviour
     {
         while (true)
         {
-            if ((lastBuildPosition - fpc.transform.position).magnitude > chunkDimensions.x)
+            if ((lastBuildPosition - fpc.transform.position).magnitude > (chunkDimensions.x))
             {
                 lastBuildPosition = Vector3Int.CeilToInt(fpc.transform.position);
-                int posx = (int)(Mathf.Round(fpc.transform.position.x / chunkDimensions.x) * chunkDimensions.x);
-                int posz = (int)(Mathf.Round(fpc.transform.position.z / chunkDimensions.z) * chunkDimensions.z);
+                int posx = (int)(fpc.transform.position.x / chunkDimensions.x) * chunkDimensions.x;
+                int posz = (int)(fpc.transform.position.z / chunkDimensions.z) * chunkDimensions.z;
                 buildQueue.Enqueue(BuildRecursiveWorld(posx, posz, drawRadius));
                 buildQueue.Enqueue(HideColumns(posx, posz));
             }
