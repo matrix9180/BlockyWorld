@@ -5,11 +5,14 @@ using UnityEngine;
 [ExecuteInEditMode]
 public class PerlinGrapher : MonoBehaviour
 {
-    LineRenderer lr;
+    public LineRenderer lr;
     public float heightScale = 2;
+    [Range(0.0f, 1.0f)]
     public float scale = 0.5f;
     public int octaves = 1;
     public float heightOffset = 1;
+    [Range(0.0f, 1.0f)]
+    public float probability = 1;
     // Start is called before the first frame update
     void Start()
     {
@@ -17,8 +20,8 @@ public class PerlinGrapher : MonoBehaviour
         lr.positionCount = 100;
         Graph();
     }
-/*
-    float fBM(float x, float z)
+
+    /*float fBM(float x, float z)
     {
         float total = 0;
         float frequency = 1;
@@ -28,8 +31,8 @@ public class PerlinGrapher : MonoBehaviour
             frequency *= 2;
         }
         return total;
-    }
-*/
+    }*/
+
     void Graph()
     {
         lr = this.GetComponent<LineRenderer>();
@@ -38,7 +41,7 @@ public class PerlinGrapher : MonoBehaviour
         Vector3[] positions = new Vector3[lr.positionCount];
         for (int x = 0; x < lr.positionCount; x++)
         {
-            float y = MeshUtils.fBM(x, z, octaves, scale, heightScale, heightOffset) + heightOffset;
+            float y = MeshUtils.fBM(x, z, octaves, scale, heightScale,heightOffset);
             positions[x] = new Vector3(x, y, z);
         }
         lr.SetPositions(positions);

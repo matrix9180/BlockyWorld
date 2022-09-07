@@ -14,12 +14,6 @@ public class Chunk : MonoBehaviour
     public int height = 2;
     public int depth = 2;
 
-    [Header("Perlin Settings")]
-    public float heightScale = 10;
-    public float scale = 0.001f;
-    public int octaves = 8;
-    public float heightOffset = -33;
-
     public Vector3 location;
 
     public Block[,,] blocks;
@@ -28,34 +22,91 @@ public class Chunk : MonoBehaviour
     //y = (i / WIDTH) % HEIGHT
     //z = i / (WIDTH * HEIGHT )
     public MeshUtils.BlockType[] chunkData;
+    public MeshRenderer meshRenderer;
 
-    void BuildChunk()
+    CalculateBlockTypes calculateBlockTypes;
+    JobHandle jobHandle;
+
+    struct CalculateBlockTypes : IJobParallelFor
     {
-        int blockCount = width * depth * height;
-        chunkData = new MeshUtils.BlockType[blockCount];
-        for (int i = 0; i < blockCount; i++)
+        public NativeArray<MeshUtils.BlockType> cData;
+        public int width;
+        public int height;
+        public Vector3 location;
+        public Unity.Mathematics.Random random;
+
+        public void Execute(int i)
         {
             int x = i % width + (int)location.x;
             int y = (i / width) % height + (int)location.y;
             int z = i / (width * height) + (int)location.z;
 
-            float surfaceHeight = MeshUtils.fBM(x,z,octaves, scale, heightScale, heightOffset) + heightOffset;
+            random = new Unity.Mathematics.Random(1);
+
+            int surfaceHeight = (int)MeshUtils.fBM(x, z, World.surfaceSettings.octaves,
+                                                   World.surfaceSettings.scale, World.surfaceSettings.heightScale,
+                                                   World.surfaceSettings.heightOffset);
+
+            int stoneHeight = (int)MeshUtils.fBM(x, z, World.stoneSettings.octaves,
+                                                   World.stoneSettings.scale, World.stoneSettings.heightScale,
+                                                   World.stoneSettings.heightOffset);
+
+            int diamondTHeight = (int)MeshUtils.fBM(x, z, World.diamondTSettings.octaves,
+                                       World.diamondTSettings.scale, World.diamondTSettings.heightScale,
+                                       World.diamondTSettings.heightOffset);
+
+            int diamondBHeight = (int)MeshUtils.fBM(x, z, World.diamondBSettings.octaves,
+                           World.diamondBSettings.scale, World.diamondBSettings.heightScale,
+                           World.diamondBSettings.heightOffset);
+
+            int digCave = (int)MeshUtils.fBM3D(x, y, z, World.caveSettings.octaves,
+                           World.caveSettings.scale, World.caveSettings.heightScale,
+                           World.caveSettings.heightOffset);
+
+            if (y == 0)
+            {
+                cData[i] = MeshUtils.BlockType.BEDROCK;
+                return;
+            }
+
+            if (digCave < World.caveSettings.probability)
+            {
+                cData[i] = MeshUtils.BlockType.AIR;
+                return;
+            }
 
             if (surfaceHeight == y)
             {
+                cData[i] = MeshUtils.BlockType.GRASSSIDE;
             }
+            else if (y < diamondTHeight && y > diamondBHeight && random.NextFloat(1) <= World.diamondTSettings.probability)
+                cData[i] = MeshUtils.BlockType.DIAMOND;
+            else if (y < stoneHeight && random.NextFloat(1) <= World.stoneSettings.probability)
+                cData[i] = MeshUtils.BlockType.STONE;
             else if (y < surfaceHeight)
-                chunkData[i] = MeshUtils.BlockType.DIRT;
+                cData[i] = MeshUtils.BlockType.DIRT;
             else
-            {
-                chunkData[i] = MeshUtils.BlockType.AIR;
-            }
-            
-            if(MeshUtils.fBM(x, z, octaves, scale, heightScale, heightOffset) > y)
-                chunkData[i] = MeshUtils.BlockType.DIRT;
-            else
-                chunkData[i] = MeshUtils.BlockType.AIR;
+                cData[i] = MeshUtils.BlockType.AIR;
         }
+    }
+
+    void BuildChunk()
+    {
+        int blockCount = width * depth * height;
+        chunkData = new MeshUtils.BlockType[blockCount];
+        NativeArray<MeshUtils.BlockType> blockTypes = new NativeArray<MeshUtils.BlockType>(chunkData, Allocator.Persistent);
+        calculateBlockTypes = new CalculateBlockTypes()
+        {
+            cData = blockTypes,
+            width = width,
+            height = height,
+            location = location
+        };
+
+        jobHandle = calculateBlockTypes.Schedule(chunkData.Length, 64);
+        jobHandle.Complete();
+        calculateBlockTypes.cData.CopyTo(chunkData);
+        blockTypes.Dispose();
     }
 
     // Start is called before the first frame update
@@ -71,10 +122,9 @@ public class Chunk : MonoBehaviour
         height = (int)dimensions.y;
         depth = (int)dimensions.z;
 
-
-
         MeshFilter mf = this.gameObject.AddComponent<MeshFilter>();
         MeshRenderer mr = this.gameObject.AddComponent<MeshRenderer>();
+        meshRenderer = mr;
         mr.material = atlas;
         blocks = new Block[width, height, depth];
         BuildChunk();
