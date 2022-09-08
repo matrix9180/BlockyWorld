@@ -133,7 +133,7 @@ public class Chunk : MonoBehaviour
         meshRenderer = mr;
         mr.material = atlas;
         blocks = new Block[width, height, depth];
-        if (rebuildBlocks) BuildChunk();
+        BuildChunk();
 
         var inputMeshes = new List<Mesh>();
         int vertexStart = 0;
