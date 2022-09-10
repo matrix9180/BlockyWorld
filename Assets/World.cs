@@ -24,9 +24,9 @@ public struct PerlinSettings
 
 public class World : MonoBehaviour
 {
-    public static Vector3Int worldDimensions = new Vector3Int(20, 5, 20);
-    public static Vector3Int extraWorldDimensions = new Vector3Int(10, 5, 10);
-    public static Vector3Int chunkDimensions = new Vector3Int(10, 10, 10);
+    public static Vector3Int worldDimensions = new Vector3Int(10, 10, 10);
+    public static Vector3Int extraWorldDimensions = new Vector3Int(5, 5, 5);
+    public static Vector3Int chunkDimensions = new Vector3Int(16, 16, 16);
     public GameObject chunkPrefab;
     public GameObject mCamera;
     public GameObject fpc;
@@ -88,6 +88,54 @@ public class World : MonoBehaviour
              caves.octaves, caves.heightOffset, caves.DrawCutOff);
 
         StartCoroutine(BuildWorld());
+    }
+    MeshUtils.BlockType buildType = MeshUtils.BlockType.DIRT;
+
+    public void SetBuildType(int type)
+    {
+        buildType = (MeshUtils.BlockType)type;
+
+    }
+
+    void Update()
+    {
+        if(Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1))
+        {
+            RaycastHit hit;
+            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            if(Physics.Raycast(ray, out hit, 10))
+            {
+                Vector3 hitBlock = new Vector3(0,0,0);
+                if(Input.GetMouseButtonDown(0))
+                {
+                    hitBlock = hit.point - hit.normal * 0.5f;
+                }
+                else
+                {
+                    hitBlock = hit.point + hit.normal * 0.5f;
+                }
+                Debug.Log("Block location: " + hitBlock.x + ", " + hitBlock.y + ", " + hitBlock.z);
+                Chunk thisChunk = hit.collider.gameObject.GetComponent<Chunk>();
+                int bx = (int)(Mathf.Round(hitBlock.x) - thisChunk.location.x);
+                int by = (int)(Mathf.Round(hitBlock.y) - thisChunk.location.y);
+                int bz = (int)(Mathf.Round(hitBlock.z) - thisChunk.location.z);
+                int i = bx + chunkDimensions.x * (by + chunkDimensions.z * bz);
+                
+                if(Input.GetMouseButtonDown(0))    
+                {    
+                    thisChunk.chunkData[i] = MeshUtils.BlockType.AIR;
+                }
+                else
+                {
+                    thisChunk.chunkData[i] = (MeshUtils.BlockType)buildType;
+                }
+                
+                DestroyImmediate(thisChunk.GetComponent<MeshRenderer>());
+                DestroyImmediate(thisChunk.GetComponent<MeshFilter>());
+                DestroyImmediate(thisChunk.GetComponent<Collider>());
+                thisChunk.CreateChunk(chunkDimensions, thisChunk.location, false);
+            }
+        }
     }
 
     void BuildChunkColumn(int x, int z, bool meshEnabled = true)
@@ -167,7 +215,7 @@ public class World : MonoBehaviour
         fpc.SetActive(true);
         lastBuildPosition = Vector3Int.CeilToInt(fpc.transform.position);
         StartCoroutine(BuildCoordinator());
-        StartCoroutine(UpdateWorld());
+        //StartCoroutine(UpdateWorld());
         StartCoroutine(BuildExtraWorld());
     }
 
