@@ -172,16 +172,45 @@ public class World : MonoBehaviour
 
                 int i = bx + chunkDimensions.x * (by + chunkDimensions.z * bz);
 
-                if(Input.GetMouseButtonDown(0))
-                    thisChunk.chunkData[i] = MeshUtils.BlockType.AIR;
+                if (Input.GetMouseButtonDown(0))
+                {
+                    if (MeshUtils.blockTypeHealth[(int)thisChunk.chunkData[i]] != -1)
+                    {
+                        if (thisChunk.healthData[i] == MeshUtils.BlockType.NOCRACK)
+                            StartCoroutine(HealBlock(thisChunk, i));
+                        thisChunk.healthData[i]++;
+                        if (thisChunk.healthData[i] == MeshUtils.BlockType.NOCRACK +
+                                                       MeshUtils.blockTypeHealth[(int)thisChunk.chunkData[i]])
+                            thisChunk.chunkData[i] = MeshUtils.BlockType.AIR;
+                    }
+                }
                 else
+                {
                     thisChunk.chunkData[i] = buildType;
+                    thisChunk.healthData[i] = MeshUtils.BlockType.NOCRACK;
+                }
 
-                DestroyImmediate(thisChunk.GetComponent<MeshFilter>());
-                DestroyImmediate(thisChunk.GetComponent<MeshRenderer>());
-                DestroyImmediate(thisChunk.GetComponent<Collider>());
-                thisChunk.CreateChunk(chunkDimensions, thisChunk.location, false);
+                RedrawChunk(thisChunk);
             }
+        }
+    }
+
+    void RedrawChunk(Chunk c)
+    {
+        DestroyImmediate(c.GetComponent<MeshFilter>());
+        DestroyImmediate(c.GetComponent<MeshRenderer>());
+        DestroyImmediate(c.GetComponent<Collider>());
+        c.CreateChunk(chunkDimensions, c.location, false);
+    }
+
+    WaitForSeconds threeSeconds = new WaitForSeconds(3);
+    public IEnumerator HealBlock(Chunk c, int blockIndex)
+    {
+        yield return threeSeconds;
+        if (c.chunkData[blockIndex] != MeshUtils.BlockType.AIR)
+        {
+            c.healthData[blockIndex] = MeshUtils.BlockType.NOCRACK;
+            RedrawChunk(c);
         }
     }
 
