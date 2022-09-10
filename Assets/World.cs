@@ -24,9 +24,9 @@ public struct PerlinSettings
 
 public class World : MonoBehaviour
 {
-    public static Vector3Int worldDimensions = new Vector3Int(10, 10, 10);
+    public static Vector3Int worldDimensions = new Vector3Int(5, 5, 5);
     public static Vector3Int extraWorldDimensions = new Vector3Int(5, 5, 5);
-    public static Vector3Int chunkDimensions = new Vector3Int(16, 16, 16);
+    public static Vector3Int chunkDimensions = new Vector3Int(10, 10, 10);
     public GameObject chunkPrefab;
     public GameObject mCamera;
     public GameObject fpc;
@@ -89,49 +89,96 @@ public class World : MonoBehaviour
 
         StartCoroutine(BuildWorld());
     }
-    MeshUtils.BlockType buildType = MeshUtils.BlockType.DIRT;
 
+    MeshUtils.BlockType buildType = MeshUtils.BlockType.DIRT;
     public void SetBuildType(int type)
     {
-        buildType = (MeshUtils.BlockType)type;
-
+        buildType = (MeshUtils.BlockType) type;
     }
 
     void Update()
     {
-        if(Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1))
+        if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1))
         {
             RaycastHit hit;
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-            if(Physics.Raycast(ray, out hit, 10))
+            if (Physics.Raycast(ray, out hit, 10))
             {
-                Vector3 hitBlock = new Vector3(0,0,0);
-                if(Input.GetMouseButtonDown(0))
+                Vector3 hitBlock = Vector3.zero;
+                if (Input.GetMouseButtonDown(0))
                 {
-                    hitBlock = hit.point - hit.normal * 0.5f;
+                    hitBlock = hit.point - hit.normal / 2.0f;
                 }
                 else
-                {
-                    hitBlock = hit.point + hit.normal * 0.5f;
-                }
-                Debug.Log("Block location: " + hitBlock.x + ", " + hitBlock.y + ", " + hitBlock.z);
+                    hitBlock = hit.point + hit.normal / 2.0f;
+
+                //Debug.Log("Block Location: " + hitBlock.x + "," + hitBlock.y + "," + hitBlock.z);
                 Chunk thisChunk = hit.collider.gameObject.GetComponent<Chunk>();
+
                 int bx = (int)(Mathf.Round(hitBlock.x) - thisChunk.location.x);
                 int by = (int)(Mathf.Round(hitBlock.y) - thisChunk.location.y);
                 int bz = (int)(Mathf.Round(hitBlock.z) - thisChunk.location.z);
-                int i = bx + chunkDimensions.x * (by + chunkDimensions.z * bz);
-                
-                if(Input.GetMouseButtonDown(0))    
-                {    
-                    thisChunk.chunkData[i] = MeshUtils.BlockType.AIR;
-                }
-                else
+
+                Vector3Int neighbour;
+                if (bx == chunkDimensions.x)
                 {
-                    thisChunk.chunkData[i] = (MeshUtils.BlockType)buildType;
+                    neighbour = new Vector3Int((int)thisChunk.location.x + chunkDimensions.x,
+                                                (int)thisChunk.location.y,
+                                                 (int)thisChunk.location.z);
+                    thisChunk = chunks[neighbour];
+                    bx = 0;
                 }
-                
-                DestroyImmediate(thisChunk.GetComponent<MeshRenderer>());
+                else if (bx == -1)
+                {
+                    neighbour = new Vector3Int((int)thisChunk.location.x - chunkDimensions.x,
+                                                (int)thisChunk.location.y,
+                                                 (int)thisChunk.location.z);
+                    thisChunk = chunks[neighbour];
+                    bx = chunkDimensions.x - 1;
+                }
+                else if (by == chunkDimensions.y)
+                {
+                    neighbour = new Vector3Int((int)thisChunk.location.x,
+                                                (int)thisChunk.location.y + chunkDimensions.y,
+                                                 (int)thisChunk.location.z);
+                    thisChunk = chunks[neighbour];
+                    by = 0;
+                }
+                else if (by == -1)
+                {
+                    neighbour = new Vector3Int((int)thisChunk.location.x,
+                                                (int)thisChunk.location.y - chunkDimensions.y,
+                                                 (int)thisChunk.location.z);
+                    thisChunk = chunks[neighbour];
+                    by = chunkDimensions.y - 1;
+                }
+                else if (bz == chunkDimensions.z)
+                {
+                    neighbour = new Vector3Int((int)thisChunk.location.x,
+                                                (int)thisChunk.location.y,
+                                                 (int)thisChunk.location.z + chunkDimensions.z);
+                    thisChunk = chunks[neighbour];
+                    bz = 0;
+                }
+                else if (bz == -1)
+                {
+                    neighbour = new Vector3Int((int)thisChunk.location.x,
+                                                (int)thisChunk.location.y,
+                                                 (int)thisChunk.location.z - chunkDimensions.z);
+                    thisChunk = chunks[neighbour];
+                    bz = chunkDimensions.z - 1;
+                }
+
+
+                int i = bx + chunkDimensions.x * (by + chunkDimensions.z * bz);
+
+                if(Input.GetMouseButtonDown(0))
+                    thisChunk.chunkData[i] = MeshUtils.BlockType.AIR;
+                else
+                    thisChunk.chunkData[i] = buildType;
+
                 DestroyImmediate(thisChunk.GetComponent<MeshFilter>());
+                DestroyImmediate(thisChunk.GetComponent<MeshRenderer>());
                 DestroyImmediate(thisChunk.GetComponent<Collider>());
                 thisChunk.CreateChunk(chunkDimensions, thisChunk.location, false);
             }
