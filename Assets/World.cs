@@ -27,6 +27,8 @@ public class World : MonoBehaviour
     public static Vector3Int worldDimensions = new Vector3Int(5, 5, 5);
     public static Vector3Int extraWorldDimensions = new Vector3Int(5, 5, 5);
     public static Vector3Int chunkDimensions = new Vector3Int(10, 10, 10);
+
+    public bool loadFromFile = false;
     public GameObject chunkPrefab;
     public GameObject mCamera;
     public GameObject fpc;
@@ -47,9 +49,9 @@ public class World : MonoBehaviour
     public static PerlinSettings caveSettings;
     public Perlin3DGrapher caves;
 
-    HashSet<Vector3Int> chunkChecker = new HashSet<Vector3Int>();
-    HashSet<Vector2Int> chunkColumns = new HashSet<Vector2Int>();
-    Dictionary<Vector3Int, Chunk> chunks = new Dictionary<Vector3Int, Chunk>();
+    public HashSet<Vector3Int> chunkChecker = new HashSet<Vector3Int>();
+    public HashSet<Vector2Int> chunkColumns = new HashSet<Vector2Int>();
+    public Dictionary<Vector3Int, Chunk> chunks = new Dictionary<Vector3Int, Chunk>();
 
     Vector3Int lastBuildPosition;
     int drawRadius = 3;
@@ -66,6 +68,73 @@ public class World : MonoBehaviour
         }
     }
 
+    public void SaveWorld()
+    {
+        FileSaver.Save(this);
+    }
+
+    IEnumerator LoadWorldFromFile()
+    {
+        WorldData wd = FileSaver.Load();
+        if(wd == null)
+        {
+            StartCoroutine(BuildWorld());
+            yield break;
+        }
+
+        chunkChecker.Clear();
+        for(int i=0; i < wd.chunkCheckerValues.Length; i+=3)
+        {
+            chunkChecker.Add(new Vector3Int(wd.chunkCheckerValues[i], 
+                wd.chunkCheckerValues[i + 1], 
+                wd.chunkCheckerValues[i + 2]
+            ));
+        }
+
+        chunkColumns.Clear();
+        for(int i=0; i < wd.chunkColumnValues.Length; i+=2)
+        {
+            chunkColumns.Add(new Vector2Int(wd.chunkColumnValues[i], 
+                wd.chunkColumnValues[i + 1]
+            ));
+        }
+
+        int index = 0;
+        int vIndex = 0;
+        loadingBar.maxValue = chunkChecker.Count;
+        foreach(Vector3Int chunkPos in chunkChecker)
+        {
+            GameObject chunk = Instantiate(chunkPrefab);
+            chunk.name = "Chunk " + chunkPos.x + ", " + chunkPos.y + ", " + chunkPos.z;
+            Chunk c = chunk.GetComponent<Chunk>();
+            int blockCount = chunkDimensions.x * chunkDimensions.y * chunkDimensions.z;
+            c.chunkData = new MeshUtils.BlockType[blockCount];
+            c.healthData = new MeshUtils.BlockType[blockCount];
+
+            for(int i=0; i < blockCount; i++)
+            {
+                c.chunkData[i] = (MeshUtils.BlockType)wd.allChunkData[index];
+                c.healthData[i] = MeshUtils.BlockType.NOCRACK;
+                index++;
+            }
+            loadingBar.value++;
+            c.CreateChunk(chunkDimensions, chunkPos, false);
+            chunks.Add(chunkPos, c);
+            RedrawChunk(c);
+            c.meshRenderer.enabled = wd.chunkVisibility[vIndex];
+            vIndex++;
+             
+            yield return null;
+        }
+
+        fpc.transform.position = new Vector3(wd.fpcX, wd.fpcY, wd.fpcZ);
+        mCamera.SetActive(false);
+        fpc.SetActive(true);
+        loadingBar.gameObject.SetActive(false);
+        lastBuildPosition = Vector3Int.CeilToInt(fpc.transform.position);
+        StartCoroutine(BuildCoordinator());
+        StartCoroutine(UpdateWorld());
+    }
 
     // Start is called before the first frame update
     void Start()
@@ -86,14 +155,83 @@ public class World : MonoBehaviour
 
         caveSettings = new PerlinSettings(caves.heightScale, caves.scale,
              caves.octaves, caves.heightOffset, caves.DrawCutOff);
-
-        StartCoroutine(BuildWorld());
+        if(loadFromFile)
+        {
+            StartCoroutine(LoadWorldFromFile());
+        }
+        else
+            StartCoroutine(BuildWorld());
     }
 
     MeshUtils.BlockType buildType = MeshUtils.BlockType.DIRT;
     public void SetBuildType(int type)
     {
         buildType = (MeshUtils.BlockType) type;
+    }
+
+    Vector3Int FromFlat(int i)
+    {
+        return new Vector3Int(i%chunkDimensions.x, (i/chunkDimensions.x)%chunkDimensions.y,
+            i/(chunkDimensions.x*chunkDimensions.y));
+    }
+
+    int ToFlat(Vector3Int v)
+    {
+        return v.x + chunkDimensions.x * (v.y + chunkDimensions.z * v.z);
+    }
+
+    public System.Tuple<Vector3Int, Vector3Int> GetWorldNeighbor(Vector3Int blockIndex, Vector3Int chunkIndex)
+    {
+        Chunk thisChunk = chunks[chunkIndex];
+        int bx = blockIndex.x;
+        int by = blockIndex.y;
+        int bz = blockIndex.z;
+
+        Vector3Int neighbour = chunkIndex;;
+                if (bx == chunkDimensions.x)
+                {
+                    neighbour = new Vector3Int((int)thisChunk.location.x + chunkDimensions.x,
+                                                (int)thisChunk.location.y,
+                                                 (int)thisChunk.location.z);
+                    bx = 0;
+                }
+                else if (bx == -1)
+                {
+                    neighbour = new Vector3Int((int)thisChunk.location.x - chunkDimensions.x,
+                                                (int)thisChunk.location.y,
+                                                 (int)thisChunk.location.z);
+                    bx = chunkDimensions.x - 1;
+                }
+                else if (by == chunkDimensions.y)
+                {
+                    neighbour = new Vector3Int((int)thisChunk.location.x,
+                                                (int)thisChunk.location.y + chunkDimensions.y,
+                                                 (int)thisChunk.location.z);
+                    by = 0;
+                }
+                else if (by == -1)
+                {
+                    neighbour = new Vector3Int((int)thisChunk.location.x,
+                                                (int)thisChunk.location.y - chunkDimensions.y,
+                                                 (int)thisChunk.location.z);
+                    by = chunkDimensions.y - 1;
+                }
+                else if (bz == chunkDimensions.z)
+                {
+                    neighbour = new Vector3Int((int)thisChunk.location.x,
+                                                (int)thisChunk.location.y,
+                                                 (int)thisChunk.location.z + chunkDimensions.z);
+                    bz = 0;
+                }
+                else if (bz == -1)
+                {
+                    neighbour = new Vector3Int((int)thisChunk.location.x,
+                                                (int)thisChunk.location.y,
+                                                 (int)thisChunk.location.z - chunkDimensions.z);
+                    bz = chunkDimensions.z - 1;
+                }
+
+        return new System.Tuple<Vector3Int, Vector3Int>(new Vector3Int(bx, by, bz), neighbour);
     }
 
     void Update()
@@ -119,58 +257,9 @@ public class World : MonoBehaviour
                 int by = (int)(Mathf.Round(hitBlock.y) - thisChunk.location.y);
                 int bz = (int)(Mathf.Round(hitBlock.z) - thisChunk.location.z);
 
-                Vector3Int neighbour;
-                if (bx == chunkDimensions.x)
-                {
-                    neighbour = new Vector3Int((int)thisChunk.location.x + chunkDimensions.x,
-                                                (int)thisChunk.location.y,
-                                                 (int)thisChunk.location.z);
-                    thisChunk = chunks[neighbour];
-                    bx = 0;
-                }
-                else if (bx == -1)
-                {
-                    neighbour = new Vector3Int((int)thisChunk.location.x - chunkDimensions.x,
-                                                (int)thisChunk.location.y,
-                                                 (int)thisChunk.location.z);
-                    thisChunk = chunks[neighbour];
-                    bx = chunkDimensions.x - 1;
-                }
-                else if (by == chunkDimensions.y)
-                {
-                    neighbour = new Vector3Int((int)thisChunk.location.x,
-                                                (int)thisChunk.location.y + chunkDimensions.y,
-                                                 (int)thisChunk.location.z);
-                    thisChunk = chunks[neighbour];
-                    by = 0;
-                }
-                else if (by == -1)
-                {
-                    neighbour = new Vector3Int((int)thisChunk.location.x,
-                                                (int)thisChunk.location.y - chunkDimensions.y,
-                                                 (int)thisChunk.location.z);
-                    thisChunk = chunks[neighbour];
-                    by = chunkDimensions.y - 1;
-                }
-                else if (bz == chunkDimensions.z)
-                {
-                    neighbour = new Vector3Int((int)thisChunk.location.x,
-                                                (int)thisChunk.location.y,
-                                                 (int)thisChunk.location.z + chunkDimensions.z);
-                    thisChunk = chunks[neighbour];
-                    bz = 0;
-                }
-                else if (bz == -1)
-                {
-                    neighbour = new Vector3Int((int)thisChunk.location.x,
-                                                (int)thisChunk.location.y,
-                                                 (int)thisChunk.location.z - chunkDimensions.z);
-                    thisChunk = chunks[neighbour];
-                    bz = chunkDimensions.z - 1;
-                }
-
-
-                int i = bx + chunkDimensions.x * (by + chunkDimensions.z * bz);
+                var blockNeighbor = GetWorldNeighbor(new Vector3Int(bx, by, bz), Vector3Int.CeilToInt(thisChunk.location));
+                thisChunk = chunks[blockNeighbor.Item2];
+                int i = ToFlat(blockNeighbor.Item1);
 
                 if (Input.GetMouseButtonDown(0))
                 {
@@ -181,13 +270,23 @@ public class World : MonoBehaviour
                         thisChunk.healthData[i]++;
                         if (thisChunk.healthData[i] == MeshUtils.BlockType.NOCRACK +
                                                        MeshUtils.blockTypeHealth[(int)thisChunk.chunkData[i]])
+                        {
                             thisChunk.chunkData[i] = MeshUtils.BlockType.AIR;
+                            Vector3Int nBlock = FromFlat(i);
+                            var neighborBlock = GetWorldNeighbor(new Vector3Int(nBlock.x, nBlock.y + 1, nBlock.z), 
+                                Vector3Int.CeilToInt(thisChunk.location));
+                            Vector3Int block = neighborBlock.Item1;
+                            int neighborBlockIndex = ToFlat(block);
+                            Chunk neighborChunk = chunks[neighborBlock.Item2];
+                            StartCoroutine(Drop(neighborChunk, neighborBlockIndex));
+                        }
                     }
                 }
                 else
                 {
                     thisChunk.chunkData[i] = buildType;
                     thisChunk.healthData[i] = MeshUtils.BlockType.NOCRACK;
+                    StartCoroutine(Drop(thisChunk, i));
                 }
 
                 RedrawChunk(thisChunk);
@@ -211,6 +310,50 @@ public class World : MonoBehaviour
         {
             c.healthData[blockIndex] = MeshUtils.BlockType.NOCRACK;
             RedrawChunk(c);
+        }
+    }
+
+    WaitForSeconds dropDelay = new WaitForSeconds(0.1f);
+    public IEnumerator Drop(Chunk c, int blockIndex)
+    {
+        if(c.chunkData[blockIndex] != MeshUtils.BlockType.SAND)
+        {
+            yield break;
+        }
+        yield return dropDelay;
+        while(true)
+        {
+            Vector3Int thisBlock = FromFlat(blockIndex);
+
+            var neighborBlock = GetWorldNeighbor(new Vector3Int(thisBlock.x,
+                thisBlock.y-1, thisBlock.z), Vector3Int.CeilToInt(c.location));
+            Vector3Int block = neighborBlock.Item1;
+            int neighborBlockIndex = ToFlat(block);
+            Chunk neighborChunk = chunks[neighborBlock.Item2];
+            if(neighborChunk.chunkData[neighborBlockIndex] == MeshUtils.BlockType.AIR)
+            {
+                neighborChunk.chunkData[neighborBlockIndex] = MeshUtils.BlockType.SAND;
+                neighborChunk.healthData[neighborBlockIndex] = MeshUtils.BlockType.NOCRACK;
+                
+                var nBlockAbove = GetWorldNeighbor(new Vector3Int(thisBlock.x, thisBlock.y + 1, thisBlock.z), 
+                    Vector3Int.CeilToInt(c.location));
+                Vector3Int blockAbove = nBlockAbove.Item1;
+                int nBlockAboveIndex = ToFlat(blockAbove);
+                Chunk nChunkAbove = chunks[nBlockAbove.Item2];
+
+                c.chunkData[blockIndex] = MeshUtils.BlockType.AIR;
+                StartCoroutine(Drop(nChunkAbove, nBlockAboveIndex));
+
+
+                yield return dropDelay;
+                RedrawChunk(c);
+                if(neighborChunk != c)
+                    RedrawChunk(neighborChunk);
+                c = neighborChunk;
+                blockIndex = neighborBlockIndex;
+            }
+            else
+                yield break;
         }
     }
 
@@ -291,7 +434,7 @@ public class World : MonoBehaviour
         fpc.SetActive(true);
         lastBuildPosition = Vector3Int.CeilToInt(fpc.transform.position);
         StartCoroutine(BuildCoordinator());
-        //StartCoroutine(UpdateWorld());
+        StartCoroutine(UpdateWorld());
         StartCoroutine(BuildExtraWorld());
     }
 
