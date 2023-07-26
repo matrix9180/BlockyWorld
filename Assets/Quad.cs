@@ -4,11 +4,11 @@ using UnityEngine;
 
 public class Quad
 {
-    // Start is called before the first frame update
-    public Mesh Build(Block.BlockSide side, Vector3 offset)
-    {
-        Mesh mesh;
+    public Mesh mesh;
 
+    // Start is called before the first frame update
+    public Quad(Block.BlockSide side, Vector3 offset)
+    {
         mesh = new Mesh();
         mesh.name = "ScriptedQuad";
 
@@ -77,7 +77,5 @@ public class Quad
         mesh.triangles = triangles;
 
         mesh.RecalculateBounds();
-
-        return mesh;
     }
 }

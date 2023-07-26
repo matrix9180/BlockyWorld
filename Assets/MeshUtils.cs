@@ -55,9 +55,9 @@ public static class MeshUtils
 
     public static void ExtractArrays(Dictionary<VertexData, int> list, Mesh mesh)
     {
-        list<Vector3> verts = new List<Vector3>();
-        list<Vector3> norms = new List<Vector3>();
-        list<Vector2> uvs = new List<Vector2>();
+        List<Vector3> verts = new List<Vector3>();
+        List<Vector3> norms = new List<Vector3>();
+        List<Vector2> uvs = new List<Vector2>();
 
         foreach (VertexData v in list.Keys)
         {
