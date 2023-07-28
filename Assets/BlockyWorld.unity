@@ -156,6 +156,7 @@ MonoBehaviour:
   width: 10
   height: 10
   depth: 10
+  chunkData: 
 --- !u!4 &251569254
 Transform:
   m_ObjectHideFlags: 0
